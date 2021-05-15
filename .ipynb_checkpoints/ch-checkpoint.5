@@ -1,0 +1,519 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Deep Learning for Computer Vision"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Covers the following:-\n",
+    "#Understanding Convulational neural networks.\n",
+    "#Using data augmentation to mitigate overfitting\n",
+    "#Using a pretrained convnet to do feature extraction\n",
+    "#Fine-tuning a pretrained convnet\n",
+    "#Visualizng what convnets learn and how they make classification decisionsm"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### we r abt to dive into the theory of what convnets are and why they have been so successful at computer vision tasks.\n",
+    "# first a practical example. It uses a convnet to classify MNIST digits, a task we performed in chapter 2 using a densely\n",
+    "# connected network (our test accuracy then was 97.8%). Even though the convnet will be basic, it's accuracy will\n",
+    "# blow out of the water that of the densely connected model from ch. 2. \n",
+    "# The following lines of code show what a basic convnet looks like. It's a stack of Conv2D and MaxPooling 2D layers. "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 5.1. Instantiating a small convnet"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from keras import layers\n",
+    "from keras import models\n",
+    "\n",
+    "model = models.Sequential()\n",
+    "model.add(layers.Conv2D(32, (3,3), activation='relu', input_shape=(28,28,1)))\n",
+    "model.add(layers.MaxPooling2D((2, 2)))\n",
+    "model.add(layers.Conv2D(64, (3, 3), activation='relu'))\n",
+    "model.add(layers.MaxPooling2D((2, 2)))\n",
+    "model.add(layers.Conv2D(64, (3,3), activation='relu'))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Model: \"sequential\"\n",
+      "_________________________________________________________________\n",
+      "Layer (type)                 Output Shape              Param #   \n",
+      "=================================================================\n",
+      "conv2d (Conv2D)              (None, 26, 26, 32)        320       \n",
+      "_________________________________________________________________\n",
+      "max_pooling2d (MaxPooling2D) (None, 13, 13, 32)        0         \n",
+      "_________________________________________________________________\n",
+      "conv2d_1 (Conv2D)            (None, 11, 11, 64)        18496     \n",
+      "_________________________________________________________________\n",
+      "max_pooling2d_1 (MaxPooling2 (None, 5, 5, 64)          0         \n",
+      "_________________________________________________________________\n",
+      "conv2d_2 (Conv2D)            (None, 3, 3, 64)          36928     \n",
+      "=================================================================\n",
+      "Total params: 55,744\n",
+      "Trainable params: 55,744\n",
+      "Non-trainable params: 0\n",
+      "_________________________________________________________________\n"
+     ]
+    }
+   ],
+   "source": [
+    "# importantly, a convnet takes as input tensors of shape (image_height, image_width, image_channels)(not including\n",
+    "# the batch dimension). In this case, we'll configure the convnet to process inputs of size (28, 28, 1), which is \n",
+    "# the format of MNIST images. We'll do this by passing the argument input_shape=(28, 28, 1) to the first layer.\n",
+    "# Let's display the architecture of the convnet so far:\n",
+    "model.summary()"
+   ]
+  },
+  {
+   "cell_type": "raw",
+   "metadata": {},
+   "source": [
+    "# The output of every conv 2D and MaxPooling 2D is a 3D tensor of shape (height, width, channels). The width and\n",
+    "# dimensions tend to shrink as you go deeper in the network. The no. of layers is controlled by the first argument\n",
+    "# passed to the Conv2D layers (32 or 64).  The next step is to feed the last output tensor (ofshape (3 ,3, 64))\n",
+    "# into a densely classified network like those you're already family with: a stack of dense layers.\n",
+    "# These classsifiers process vectors, which are 1D, whereas the current output is a 3D tensor. \n",
+    "# First we have to flatten the 3D outputs to 1D, and then add a few Dense layers on top."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Adding classifier on top of the convnet"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "model.add(layers.Flatten())\n",
+    "model.add(layers.Dense(64, activation='relu'))\n",
+    "model.add(layers.Dense(10, activation='softmax'))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Model: \"sequential\"\n",
+      "_________________________________________________________________\n",
+      "Layer (type)                 Output Shape              Param #   \n",
+      "=================================================================\n",
+      "conv2d (Conv2D)              (None, 26, 26, 32)        320       \n",
+      "_________________________________________________________________\n",
+      "max_pooling2d (MaxPooling2D) (None, 13, 13, 32)        0         \n",
+      "_________________________________________________________________\n",
+      "conv2d_1 (Conv2D)            (None, 11, 11, 64)        18496     \n",
+      "_________________________________________________________________\n",
+      "max_pooling2d_1 (MaxPooling2 (None, 5, 5, 64)          0         \n",
+      "_________________________________________________________________\n",
+      "conv2d_2 (Conv2D)            (None, 3, 3, 64)          36928     \n",
+      "_________________________________________________________________\n",
+      "flatten (Flatten)            (None, 576)               0         \n",
+      "_________________________________________________________________\n",
+      "dense (Dense)                (None, 64)                36928     \n",
+      "_________________________________________________________________\n",
+      "dense_1 (Dense)              (None, 10)                650       \n",
+      "=================================================================\n",
+      "Total params: 93,322\n",
+      "Trainable params: 93,322\n",
+      "Non-trainable params: 0\n",
+      "_________________________________________________________________\n"
+     ]
+    }
+   ],
+   "source": [
+    "# we'll do a 10-way classification, using a final layer with 10 outputs and a softmax activation. Here's what the\n",
+    "# network looks like now:\n",
+    "model.summary()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## the (3, 3, 64) ouputs are flattened into vectors of shape (576,) before going through two Dense layers.\n",
+    "# Now, let's train the convnet on the MNIST digits. We'll reuse a lot of the code the MNIST example in chapter 2."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Training the convnet on MNIST images"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Downloading data from https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz\n",
+      "11493376/11490434 [==============================] - 3s 0us/step\n",
+      "Epoch 1/5\n",
+      "938/938 [==============================] - 30s 30ms/step - loss: 0.3987 - accuracy: 0.8724\n",
+      "Epoch 2/5\n",
+      "938/938 [==============================] - 29s 31ms/step - loss: 0.0524 - accuracy: 0.9843\n",
+      "Epoch 3/5\n",
+      "938/938 [==============================] - 29s 31ms/step - loss: 0.0323 - accuracy: 0.9899\n",
+      "Epoch 4/5\n",
+      "938/938 [==============================] - 30s 31ms/step - loss: 0.0246 - accuracy: 0.9929\n",
+      "Epoch 5/5\n",
+      "938/938 [==============================] - 30s 31ms/step - loss: 0.0175 - accuracy: 0.9947\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "<tensorflow.python.keras.callbacks.History at 0x7f57cc74e4c0>"
+      ]
+     },
+     "execution_count": 5,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "from keras.datasets import mnist\n",
+    "from keras.utils import to_categorical\n",
+    "\n",
+    "(train_images, train_labels), (test_images, test_labels) = mnist.load_data()\n",
+    "train_images = train_images.reshape((60000, 28, 28, 1))\n",
+    "train_images = train_images.astype('float32') / 255\n",
+    "\n",
+    "test_images = test_images.reshape((10000, 28, 28, 1))\n",
+    "test_images = test_images.astype('float32') / 255\n",
+    "\n",
+    "train_labels = to_categorical(train_labels)\n",
+    "test_labels = to_categorical(test_labels)\n",
+    "\n",
+    "model.compile(optimizer='rmsprop',\n",
+    "              loss='categorical_crossentropy',\n",
+    "              metrics=['accuracy'])\n",
+    "model.fit(train_images, train_labels, epochs=5, batch_size=64)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Let evaluate the model on the test_data:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "313/313 [==============================] - 2s 5ms/step - loss: 0.0394 - accuracy: 0.9892\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "0.9891999959945679"
+      ]
+     },
+     "execution_count": 7,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "test_loss, test_acc = model.evaluate(test_images, test_labels)\n",
+    "test_acc"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Whereas the densely connected network from chapter 2 had a test accuracy of 97.8%, the basic convnet has a \n",
+    "# test accuracy of 98.91, decreased the error rate by 1lmost 50%. Not bad!.\n",
+    "# But why does this simple convnet work so well, compared to a densely connected model? To answer this, let's dive \n",
+    "# into what the Conv2D and MaxPooling2D layers do."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 5.1.1. The convulution operation."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# The fundamental difference between a densely connected layer and a convolution layer is this: Dense layers learn\n",
+    "# global patterns in their input feature space (e.g., for a MNIST digit, patterns involving all pixels),\n",
+    "# whereas convolution layers learn local patterns: in the case of images, patterns found in small 2D windows of the inputs.\n",
+    "# In the previous example, these windows were all 3 x3. Images can be broken into local patterns such as edges, textures\n",
+    "# and so on."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# The key characterstic gives convnets two interesting properties:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# The patterns they learn are translation invariant: After learning a certain pattern in the lower-right corner\n",
+    "# of a picture, a convnet can recognize it anywhere; e.g., in the upper-left corner. A densely connected network \n",
+    "# would have to learn the pattern anew if it appeared at a new location. This makes convnets data efficient when\n",
+    "# processing images(because the visual world is fundamentally translation invariant): they need fewer samples to learn\n",
+    "# representations that have generalization power."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# They can learn spatial hierarchies of patterns. A first convolution layer will learn small local patterns such as \n",
+    "# edges, a second convolution layer will learn larger patterns made of the features of the first layers and so on.\n",
+    "# This allows convnets to efficiently learn increasingly complex and abstract visual concepts(because the visual\n",
+    "# world is fundamentally spatially hieraarchical).\n",
+    "# e.g., the visual world forms a spatial hierarchy of visual modules: hyperlocal edges combine into local objects such \n",
+    "# as eyes or ears, which combine into high-level concepts such as \"cat\"."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Convolutions operate over 3D tensors, called feature maps, with two spatial axes(height and width) as well as a \n",
+    "# depth axis(also called the channel axis). For an RGB image, the dimension of the depth axis is 3, coz the image \n",
+    "# has three color channels, rgb. For bnw pic, like the MNIST digits, the depth is 1 (levels of gray). The convolution\n",
+    "# op extracts patches from its input feature map and applies the same transformation to all of these patches,\n",
+    "# producing an output feature map. This output feature map is still a 3D tensor: it has a width and a height. Its\n",
+    "# depth can be arbitray, coz the output depth is a parameter of the layer, and the different channels in that\n",
+    "# depth axis no longer stand for specific colors as in RGB input; rather they stand for filters. Filters encode \n",
+    "# specific aspects of the input data: at a high level, a single filter could encode the concept \"presences of a face in \n",
+    "# the input\" for instance,\n",
+    "# In the MNIST example, the first convolution layer takes a feature map of size (28, 28, 1) and outputs a feature map \n",
+    "# of size (26, 26, 32): it computes 32 filters over its inputs. Each of these 32 output channels contains a 26 x 26 \n",
+    "# grid of values, which is a response map of the filter over the input. That is what the term feature map means:\n",
+    "# every dimension in the depth axis is a feature (or filter), and the 2D tensor output[:, :, n] is the 2D spatial\n",
+    "# map of the response of this filter over the input."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Convolutions are defined by two key parameters:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Size of the patches extracted from the inputs- These are typically 3 x 3 and 5 x 5. In the example, they were\n",
+    "# 3 x 3, which is a common choice.\n",
+    "# Depth of the output feature map-The bumber of filters computed by the convolution. The example started with a \n",
+    "# depth of 32 and ended with a depth of 64."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Depth of the output feature map-The number of filters computed by the convolution. THe example started with a depth\n",
+    "# of 32 and ended with a depth of 64."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# In keras 2D layers, these params are first args passed to the layer:: Conv2D(output_depth (window_height, window_width))."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# A convolution works by sliding these windows of size 3 x 3 or 5 x 5 voer the 3D input feature map, stopping\n",
+    "# at every possible location, and extracting the 3D patch of surrounding features( shape (window_height, \n",
+    "# window_width, input_depth)). Each such 3D path is then transformed( via a tensor product with the same learned \n",
+    "# weight called matrix, called the convolution kernel) into a ID vector of shape(output_depth,). All of these vectors \n",
+    "# are then spatially reassembled into a 3D output map of shape (height, width, output_depth). Every spatial location in \n",
+    "# the output feature map (e.g., the lower-right corner of the output contains information about the lower-right\n",
+    "# corner of the input). For instance, with 3 x 3 windows, the vector output [i, j, :] comes from the 3D parch\n",
+    "# input[i-1: i+1, j-1:j+1, :]. \n",
+    "# The output width and height may differ from the input width and height. They may differ for two reasons:\n",
+    "# Border effects, which can be countered by padding the input feature map.\n",
+    "# The use of strides. coming soon."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### Understanding Border effects and padding"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Consider a 5 x 5 feature map(25 files total). There are only 9 ties around which you can center a 3 x 3 window, \n",
+    "# forming a 3 x 3 grid. Hence the output feature map will be 3 x 3. It shrinks a little: by exactly two tiles \n",
+    "# alongside each dimension in this case. You can see this border effect in action in the earlier e.g.. u start with\n",
+    "# 28 x 28 input which become 26 x 26 after the first convolution layer.\n",
+    "\n",
+    "# If u want to get an output feature map with the same spatial dimensions as the input, u can use padding.\n",
+    "# Padding consists of adding an appropriate no. of rows and columns on each side of the input feature map \n",
+    "# so as to make it possible to fit center convolution windows around every input tile. For a 3 x 3 window, you add\n",
+    "# one column on the right, one column on the left, one row at the top and one row at the bottom. For a 5 x 5window,\n",
+    "# you add two rows. \n",
+    "\n",
+    "# In Conv2D layers, padding is configurable via the padding argument, which takes two values: \"valid\", which means \n",
+    "# no padding (only valid window locations will be used); and \"same\", which means \"pad in such a way as to have an \n",
+    "# output with the same width and height as the input.\". The padding argument defaults to \"valid.\""
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### Understanding Convolution Strides"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#The other factor that can influence output size is the notion of strides. The description of convolution so far has \n",
+    "# assumed that the center tiles of the convolution windows are all contiguous. But the distance bwtween two \n",
+    "# successive windows is a parameter of the convolution, called its stride, which defaults to 1. It's possible\n",
+    "# to have strided convolutions: convolutions with a stride hifher than 1. \n",
+    "\n",
+    "# Using stride 2 means the width and height of the feature map are downsampled by a factor of 2 (in addition to \n",
+    "# any changes intoriduced by border effects). Strided convolutions are rarely used in practice, although they\n",
+    "# come in handy for some types of models; it's good to be familiar with the concept.\n",
+    "\n",
+    "#To downsample feature maps, instead of strides, we tend to use the max-pooling operation, which you saw in action in\n",
+    "# the first convnet example. Let's look at it in more depth."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 5.1.2. The max-pooling operation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#In the convnet example, the size of the feature maps is halved after every MaxPooling2D layer. For instance, b4 \n",
+    "# the first MaxPooling2D layers, the feature map is 26 x 26, but the max-pooling operation halves it to 13 x 13.\n",
+    "# That's the role of max pooling: to aggressively downsample feature maps, much like strided convolutions.\n",
+    "# Max pooling consists of extracting windows from the input feature maps and outputting the max value of each \n",
+    "# channel. It's conceptually similar to convolution, except that instead of transforming local patches via a learned\n",
+    "# linear transformation (the convolution kernel), they 're transformed via a hardcored max tenor operation. A big\n",
+    "# difference from convolution is that max pooling is usually done with 2 x 2 windows and "
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.5"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
